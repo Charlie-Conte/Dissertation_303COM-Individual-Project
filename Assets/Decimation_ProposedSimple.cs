@@ -11,109 +11,94 @@ public class Decimation_ProposedSimple : MonoBehaviour
     public MeshFilter meshFilter;
     Mesh mesh;
     private Mesh newMesh;
-    public GameObject point;
-    public List<GameObject> pointsToView;
+
     Vector3[] vertexList;
     int[] indeceList;
-    public static Dictionary<int, Vertex> pSVertices;
-    public static Dictionary<int, Triangle> pSTriangles;
+    public static List<Vertex> dVList;
+    public static List<Triangle> dTList;
     //can have gaps e.g.[ 1, 42, 2 ,0]
 
     // Start is called before the first frame update
-    void Start()
+    public void Prepare()
     {
-        pSVertices = new Dictionary<int, Vertex>();
-        pSTriangles = new Dictionary<int,Triangle>();
+        dVList = new List<Vertex>();
+        dTList = new List<Triangle>();
+        DecimationManager.vert = new List<Vector3>();
+        DecimationManager.tri = new List<TriangleIndeceIDs>();
         newMesh = new Mesh();
         mesh = meshFilter.mesh;
         vertexList = mesh.vertices;
         indeceList = mesh.triangles;
 
-        int idSetter = 0;
 
-
-
-        for(int tri = 0; tri < mesh.triangles.Length; tri++)
+        for (int n = 0; n < vertexList.Length; n++)
         {
-            //Debug.Log(mesh.vertices[mesh.triangles[tri]][0] + "\t "+mesh.vertices[mesh.triangles[tri]][1] + "\t "+mesh.vertices[mesh.triangles[tri]][2]);
 
-            Triangle currentT = new Triangle(tri);
-            Vertex[] currentV= new Vertex[3];
+            dVList.Add(new Vertex(vertexList[n], mesh.normals[n], n));
+            DecimationManager.vert.Add(vertexList[n]);
 
-            for (int i = 0; i < 3;i++)
-            {
-                bool hasVert = false;
-                foreach (KeyValuePair<int,Vertex> pSVert in pSVertices)
-                {
-                    if(pSVert.Value.position.Equals(mesh.vertices[mesh.triangles[tri]][i])) hasVert = true;
-                }
-                if (!hasVert)
-                {
-                    currentV[i] = new Vertex(mesh.vertices[mesh.triangles[tri]], mesh.normals[mesh.triangles[tri]], idSetter);
-
-                    if (!currentV[i].face.Contains(currentT))
-                    {
-                        currentV[i].face.Add(currentT);
-                    }
-                    
-                    idSetter++;
-                }
-
-            }
-            pSTriangles[tri].SetVertices(currentV[0], currentV[1], currentV[2]);
-            
-            
 
         }
-        
+
+        for (int m = 2; m < indeceList.Length; m += 3)
+        {
+
+            dTList.Add(new Triangle(dVList[indeceList[m - 2]], dVList[indeceList[m - 1]], dVList[indeceList[m]], m));
+            DecimationManager.tri.Add(new TriangleIndeceIDs(new int[] {indeceList[m - 2], indeceList[m - 1], indeceList[m]}));
+
+        }
 
 
 
 
 
+        Debug.Log("Start Done");
 
-
-        //for (int vNumber = 0; vNumber < mesh.vertices.Length; vNumber++)
-        //{
-        //    new Vertex(mesh.vertices[vNumber], mesh.normals[vNumber], vNumber);
-            
-        ////    //GameObject v = Instantiate(point, mesh.vertices[vNumber], Quaternion.identity, gameObject.transform);
-        ////    //v.name = mesh.vertices[vNumber].ToString();
-        ////    //pointsToView.Add(v);
-        //}
-        //for (int fNumber = 2; fNumber < mesh.triangles.Length; fNumber++)
-        //{
-
-        //    mesh.SetTriangles(,)
-
-        //    Debug.Log(mesh.triangles.Length);
-        //    new Triangle(pSVertices[(fNumber - 2) * 3], pSVertices[(fNumber - 1) * 3 + 1], pSVertices[fNumber * 3 + 2]);
-
-        //}
 
 
     }
 
-    public void Decimate()
+
+
+
+
+    public void Process(List<Vector3> vert, List<TriangleIndeceIDs> tri)
     {
-        List<Vector3> nVerts = new List<Vector3>();
-        //foreach (var item in pSVertices)
-        //{
-        //    nVerts.Add(item.position + new Vector3(UnityEngine.Random.value, UnityEngine.Random.value, UnityEngine.Random.value));
-        //}
 
-        ComputeAllEdgeCollapseCosts();
-        while (pSVertices.Count > 0/*desired*/)
+
+        ComputeAllEdgeCollapseCosts(); // cache all edge collapse costs
+
+                                            // reduce the object down to nothing:
+        while (dVList.Count > 0)
         {
+            // get the next vertex to collapse
             Vertex mn = MinimumCostEdge();
-            Collapse(mn, mn.collapse);
+            int mnID = mn.id;
+            int mnIDinList = dVList.FindIndex(vID => vID.id == mnID);
+
+            DecimationManager.permutation[mnIDinList] = dVList.Count - 1;            // keep track of this vertex, i.e. the collapse ordering
+
+            // keep track of vertex to which we collapse to
+            DecimationManager.collapse_map[dVList.Count - 1] = (dVList[mnIDinList].collapse != null) ? dVList[mnIDinList].collapse.id : -1;
+            // Collapse this edge
+            if (dVList[mnIDinList].collapse != null)
+            {
+                Collapse(mnIDinList, dVList.FindIndex(vID => vID.id == dVList[mnIDinList].collapse.id));
+            }
+            else
+            {
+                Collapse(mnIDinList, -1);
+            }
+
         }
+        // reorder the map list based on the collapse ordering
+        for (int i = 0; i < DecimationManager.collapse_map.Length; i++)
+        {
+            DecimationManager.collapse_map[i] = (DecimationManager.collapse_map[i] == -1) ? 0 : DecimationManager.permutation[DecimationManager.collapse_map[i]];
+        }
+        // The caller of this function should reorder their vertices
+        // according to the returned "permutation".
 
-
-        newMesh.vertices = nVerts.ToArray();
-        newMesh.triangles = mesh.triangles;
-        newMesh.uv = mesh.uv;
-        meshFilter.mesh = newMesh;
 
 
     }
@@ -125,14 +110,16 @@ public class Decimation_ProposedSimple : MonoBehaviour
         // Serious optimization opportunity here: this function currently
         // does a sequential search through an unsorted list :-(
         // Our algorithm could be O(n*lg(n)) instead of O(n*n)
-        Vertex mn = pSVertices[0];
-        for (int i = 0; i < pSVertices.Count; i++)
+        Vertex mn = dVList[0];
+
+        for (int i = 0; i < dVList.Count; i++)
         {
-            if (pSVertices[i].objDist < mn.objDist)
+            if (dVList[i].objDist < mn.objDist)
             {
-                mn = pSVertices[i];
+                mn = dVList[i];
             }
         }
+
         return mn;
     }
     float ComputeEdgeCollapseCost(Vertex u, Vertex v)
@@ -200,47 +187,62 @@ public class Decimation_ProposedSimple : MonoBehaviour
         // For all the edges, compute the difference it would make
         // to the model if it was collapsed.  The least of these
         // per vertex is cached in each vertex object.
-        for (int i = 0; i < pSVertices.Count; i++)
+        for (int i = 0; i < dVList.Count; i++)
         {
-            ComputeEdgeCostAtVertex(pSVertices[i]);
+            ComputeEdgeCostAtVertex(dVList[i]);
         }
     }
 
-    void Collapse(Vertex u, Vertex v)
+    void Collapse(int u,int v)
     {
         // Collapse the edge uv by moving vertex u onto v
         // Actually remove tris on uv, then update tris that
         // have u to have v, and then remove u.
         
-        if (v != null)
+        if (v == -1)
         {
             
             // u is a vertex all by itself so just delete it
             
-            pSVertices.Remove(u.id);
+            dVList[u].DeleteVertex();
+            
             return;
         }
-        int i;
+        int i=0 ;
         List<Vertex >tmp = new List<Vertex>();
         // make tmp a list of all the neighbors of u
-        for (i=0;i<u.neighbor.Count;i++)
+        for (i=0;i< dVList[u].neighbor.Count;i++)
         {
-            tmp.Add(u.neighbor[i]);
+            tmp.Add(dVList[u].neighbor[i]);
         }
         // delete triangles on edge uv:
-        for (i=u.face.Count-1;i>=0;i--)
+        for (i= dVList[u].face.Count-1;i>=0;i--)
         {
-            if (u.face[i].HasVertex(v))
+            try
             {
-                pSTriangles.Remove(u.face[i].id);
+                dVList[u].face[i].HasVertex(dVList[v]);
+            }
+            catch (Exception)
+            {
+                Debug.Log(dVList[u].id + "\t" + dVList[u].face[i].id+ "\t" + dVList[v]);
+                throw;
+            }
+            if (dVList[u].face[i].HasVertex(dVList[v]))
+            {
+                //Debug.Log(i);
+                dVList[u].face[i].DeleteTriangle();
+                //dVList[dVList.FindIndex(vID => vID.id == dVList[u].face[i].id)].;
+
+
             }
         }
         // update remaining triangles to have v instead of u
-        for (i = u.face.Count - 1; i >= 0; i--) 
+        for (i = dVList[u].face.Count - 1; i >= 0; i--) 
         {
-            u.face[i].ReplaceVertex(u,v);
+            dVList[u].face[i].ReplaceVertex(u,v);
         }
-        pSVertices.Remove(u.id);
+        dVList[u].DeleteVertex();
+        //dVList.RemoveAt(dVList.FindIndex(vID => vID.id == dVList[u].id));
         // recompute the edge collapse costs in neighborhood
         for (i=0;i<tmp.Count;i++)
         {
@@ -260,6 +262,8 @@ public class Decimation_ProposedSimple : MonoBehaviour
         public Vertex[] vertices = new Vertex[3]; //triangles 3 points
         public Vector3 normal;
         public int id;
+
+
         public Triangle(Vertex v0, Vertex v1, Vertex v2, int _id)
         {
             Debug.Assert(v0 != v1 && v1 != v2 && v2 != v0);  //#mod1
@@ -270,7 +274,7 @@ public class Decimation_ProposedSimple : MonoBehaviour
             vertices[2] = v2;
 
             ComputeNormal();
-            pSTriangles.Add(id,this);
+            //pSTriangles.Add(id,this);
             for (int i = 0; i < 3; i++)
             {
                 vertices[i].face.Add(this);
@@ -288,16 +292,17 @@ public class Decimation_ProposedSimple : MonoBehaviour
         public Triangle(int _id)
         {
             id = _id;
-            pSTriangles.Add(id,this);
+            dTList.Add(this);
         }
 
-        ~Triangle()
+        public void DeleteTriangle()
         {
             int i;
-            pSTriangles.Remove(id);
+
+            dTList.RemoveAt(dTList.FindIndex(vID => vID.id == id));
             for (i = 0; i < 3; i++)
             {
-                if (vertices[i] != null) vertices[i].face.Remove(this);
+                if (vertices[i] != null) vertices[i].face.RemoveAt(vertices[i].face.FindIndex(vID => vID.id == id));
             }
             for (i = 0; i < 3; i++)
             {
@@ -343,34 +348,40 @@ public class Decimation_ProposedSimple : MonoBehaviour
             normal = Vector3.Normalize(normal);
         }
 
-        public void ReplaceVertex(Vertex vold, Vertex vnew)
+        /// <summary>
+        /// redo for static
+        /// </summary>
+        /// <param name="vold"></param>
+        /// <param name="vnew"></param>
+        public void ReplaceVertex(int vold, int vnew)
         {
             //vertices[Array.FindIndex(vertices, v => v.position == vold.position)] = vnew;
 
-            Debug.Assert(vold != null && vnew != null);
-            Debug.Assert(vold == vertices[0] || vold == vertices[1] || vold == vertices[2]);
-            Debug.Assert(vnew != vertices[0] && vnew != vertices[1] && vnew != vertices[2]);
-            if (vold == vertices[0])
+            Debug.Assert(vold != -1 && vnew != -1);
+            Debug.Assert(dVList[vold] == vertices[0] || dVList[vold] == vertices[1] || dVList[vold] == vertices[2]);
+            Debug.Assert(dVList[vnew] != vertices[0] && dVList[vnew] != vertices[1] && dVList[vnew] != vertices[2]);
+            if (dVList[vold].id == vertices[0].id)
             {
-                vertices[0] = vnew;
+                vertices[0] = dVList[vnew];
             }
-            else if (vold == vertices[1])
+            else if (dVList[vold].id == vertices[1].id)
             {
-                vertices[1] = vnew;
+                vertices[1] = dVList[vnew];
             }
             else
             {
-                Debug.Assert(vold == vertices[2]);
-                vertices[2] = vnew;
+                Debug.Assert(dVList[vold].id == vertices[2].id);
+                vertices[2] = dVList[vnew];
             }
             int i;
-            vold.face.Remove(this);
-            Debug.Assert(!vnew.face.Contains(this));
-            vnew.face.Add(this);
+            //dTList[ dVList[vold].face.FindIndex(fID => fID.id == id)].DeleteTriangle();
+            dVList[vold].face.Remove(this);
+            Debug.Assert(!dVList[vnew].face.Contains(this));
+            dVList[vnew].face.Add(this);
             for (i = 0; i < 3; i++)
             {
-                vold.RemoveIfNonNeighbor(vertices[i]);
-                vertices[i].RemoveIfNonNeighbor(vold);
+                dVList[vold].RemoveIfNonNeighbor(vertices[i]);
+                vertices[i].RemoveIfNonNeighbor(dVList[vold]);
             }
             for (i = 0; i < 3; i++)
             {
@@ -389,7 +400,7 @@ public class Decimation_ProposedSimple : MonoBehaviour
         public bool HasVertex(Vertex v)
         {
 
-            return (v == vertices[0] || v == vertices[1] || v == vertices[2]);
+            return (v.id == vertices[0].id || v.id == vertices[1].id || v.id == vertices[2].id);
         }
 
     }
@@ -410,13 +421,13 @@ public class Decimation_ProposedSimple : MonoBehaviour
             position = v;
             //normal = n;
             id = _id;
-            pSVertices.Add(id,this);
+            //pSVertices.Add(id,this);
 
             neighbor = new List<Vertex>();
             face = new List<Triangle>();
         }
 
-        ~Vertex()
+        public void DeleteVertex()
         {
             Debug.Assert(face.Count == 0);
             while (neighbor.Count != 0)
@@ -424,7 +435,8 @@ public class Decimation_ProposedSimple : MonoBehaviour
                 neighbor[0].neighbor.Remove(this);
                 neighbor.Remove(neighbor[0]);
             }
-            pSVertices.Remove(id);
+
+            dVList.RemoveAt(dVList.FindIndex(vID => vID.id == id));
         }
 
         public void RemoveIfNonNeighbor(Vertex n)

@@ -1,0 +1,8 @@
+newmtl Material
+Kd 0.0908 0.0908 0.0908
+illum 2
+
+newmtl Wireframe
+Kd 1 1 1
+illum 2
+
