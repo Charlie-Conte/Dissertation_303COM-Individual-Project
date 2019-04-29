@@ -122,6 +122,7 @@ public class Decimation_ProposedSimple : MonoBehaviour
 
         return mn;
     }
+
     float ComputeEdgeCollapseCost(Vertex u, Vertex v)
     {
         // if we collapse edge uv by moving u to v then how
@@ -266,7 +267,7 @@ public class Decimation_ProposedSimple : MonoBehaviour
 
         public Triangle(Vertex v0, Vertex v1, Vertex v2, int _id)
         {
-            Debug.Assert(v0 != v1 && v1 != v2 && v2 != v0);  //#mod1
+            Debug.Assert(v0 != v1 && v1 != v2 && v2 != v0);  
             id = _id;
 
             vertices[0] = v0;
@@ -274,7 +275,6 @@ public class Decimation_ProposedSimple : MonoBehaviour
             vertices[2] = v2;
 
             ComputeNormal();
-            //pSTriangles.Add(id,this);
             for (int i = 0; i < 3; i++)
             {
                 vertices[i].face.Add(this);

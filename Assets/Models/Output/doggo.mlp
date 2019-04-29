@@ -1,0 +1,38 @@
+<!DOCTYPE MeshLabDocument>
+<MeshLabProject>
+ <MeshGroup>
+  <MLMesh filename="dog 100.obj" label="dog 100.obj">
+   <MLMatrix44>
+1 0 0 0 
+0 1 0 0 
+0 0 1 0 
+0 0 0 1 
+</MLMatrix44>
+  </MLMesh>
+  <MLMesh filename="doggo.ply" label="Hausdorff 60">
+   <MLMatrix44>
+1 0 0 0 
+0 1 0 0 
+0 0 1 0 
+0 0 0 1 
+</MLMatrix44>
+  </MLMesh>
+  <MLMesh filename="doggoo.ply" label="Hausdorff 30">
+   <MLMatrix44>
+1 0 0 0 
+0 1 0 0 
+0 0 1 0 
+0 0 0 1 
+</MLMatrix44>
+  </MLMesh>
+  <MLMesh filename="doggooo.ply" label="Hausdorff 10">
+   <MLMatrix44>
+1 0 0 0 
+0 1 0 0 
+0 0 1 0 
+0 0 0 1 
+</MLMatrix44>
+  </MLMesh>
+ </MeshGroup>
+ <RasterGroup/>
+</MeshLabProject>

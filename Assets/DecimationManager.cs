@@ -11,7 +11,7 @@ public class DecimationManager : MonoBehaviour
     public static int[] collapse_map;  // to which neighbor each vertex collapses
     Decimation_ProposedSimple proposedSimple;
     public static int[] permutation;
-    public static int render_num = 2000;
+    public static int render_num = 50000;
     public GameObject point;
     public List<GameObject> pointsToView;
 
@@ -117,8 +117,8 @@ public class DecimationManager : MonoBehaviour
         //} 
 
 
-        AssetDatabase.CreateAsset(finalMesh, "Assets/newMesh.asset");
-        AssetDatabase.SaveAssets();
+        //AssetDatabase.CreateAsset(finalMesh, "Assets/newMesh.asset");
+        //AssetDatabase.SaveAssets();
     }
 
     void PermuteVertices(int[] permutation)
